@@ -7,6 +7,7 @@ int main(void){
 	int length;
 	int i;
 
+	printf("Input case: ");
 	scanf("%d", &n);
 
 
@@ -14,10 +15,11 @@ int main(void){
 	pp_data = (char**)malloc(sizeof(char*) * n);
 	
 	for(i = 0; i < n; i++) {
+		printf("%d's length: ", i + 1);
 		scanf("%d", &length);
 		pp_data[i] = (char*)malloc(sizeof(char) * (length + 1));
-		fgetc(stdin); // whitespace
-		fgets(pp_data[i], length + 1, stdin);
+		printf("Input data : ");
+		scanf("%s", pp_data[i]);
 	}
 	
 	//2. print string
