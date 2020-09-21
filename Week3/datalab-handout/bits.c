@@ -181,7 +181,7 @@ NOTES:
  */
 int bitXor(int x, int y) {
 // xor is ~(XY | (~X)(~Y))
-// using ~, & instead of |
+// using De Morgan's laws
   return ~(x & y) & ~(~x & ~y);
 }
 /* 
@@ -203,6 +203,12 @@ int tmin(void) {
  *   Rating: 1
  */
 int isTmax(int x) {
+// if x is Tmax or -1: 
+//   Tmin = Tmax + 1
+//   Tmin = ~Tmax
+//   => ~Tmax = Tmax + 1
+//
+// The case(x = -1) needs to be filtered.
   return !(~((x + !(x + 1)) ^ (x + 1)));
 }
 /* 
@@ -214,8 +220,11 @@ int isTmax(int x) {
  *   Rating: 2
  */
 int allOddBits(int x) {
+// m8 = 10101010
   int m8 = 0xAA;
+// m16 = 1010101010101010
   int m16 = m8 | m8 << 8;
+// m32 = 10101010... (all odd-numbered bits in word set to 1)
   int m32 = m16 | m16 << 16;
   int oddBits = x & m32;
   return !(m32 ^ oddBits);
@@ -228,6 +237,7 @@ int allOddBits(int x) {
  *   Rating: 2
  */
 int negate(int x) {
+// by 2's complement
   return ~x + 1;
 }
 //3
@@ -241,8 +251,11 @@ int negate(int x) {
  *   Rating: 3
  */
 int isAsciiDigit(int x) {
+// check x is under 0x30
   int checkUnder0x30 = x & ~0x3f;
+// check x is 0x30 ~ 0x3F
   int check0x3X = (x & 0x30) ^ 0x30;
+// check last 4bit is between 0 and 9
   int checkBetweenBound = ((x & 0xF) + 6) & 0x10;
   return !(checkUnder0x30 | check0x3X | checkBetweenBound);
 }
@@ -254,6 +267,8 @@ int isAsciiDigit(int x) {
  *   Rating: 3
  */
 int conditional(int x, int y, int z) {
+// if x is 0 => y
+// else => z
   return ((~(!x) + 1) & z) | (~(~(!x) + 1) & y);
 }
 /* 
@@ -281,6 +296,10 @@ int isLessOrEqual(int x, int y) {
  *   Rating: 4 
  */
 int logicalNeg(int x) {
+// x >> 31 : x's msb
+// (~x + 1) : -x's msb
+// x's msb is always opposite of -x's msb when x != 0
+// But The case (x = 0) is 1 (by +1 in the right side)
   return ((x >> 31) | (~x + 1) >> 31) + 1;
 }
 /* howManyBits - return the minimum number of bits required to represent x in
@@ -296,7 +315,21 @@ int logicalNeg(int x) {
  *  Rating: 4
  */
 int howManyBits(int x) {
-  return 0;
+  int sign, b1, b2, b4, b8, b16;
+// sign bit
+  sign = x >> 31;
+  x = (sign & ~x) | (~sign & x);
+  b16 = !!(x >> 16) << 4;
+  x = x >> b16;
+  b8 = !!(x >> 8) << 3;
+  x = x >> b8;
+  b4 = !!(x >> 4) << 2;
+  x = x >> b4;
+  b2 = !!(x >> 2) << 1;
+  x = x >> b2;
+  b1 = !!(x >> 1);
+  x = x >> b1;
+  return b16 + b8 + b4 + b2 + b1 + x + 1;
 }
 //float
 /* 
@@ -312,5 +345,23 @@ int howManyBits(int x) {
  *   Rating: 4
  */
 int floatFloat2Int(unsigned uf) {
-  return 2;
+  int sign = uf >> 31;
+  int exp = ((uf & 0x7f800000) >> 23) - 127;
+  int M = (uf & 0x007fffff) | 0x00800000;
+  if(!(uf & 0x7fffffff))
+      return 0;
+  if(exp > 31)
+      return 0x80000000;
+  if(exp < 0)
+      return 0;
+  if(exp > 23)
+      M <<= (exp - 23);
+  else
+      M >>= (23 - exp);
+  if(!((M >> 31) ^ sign))
+      return M;
+  else if(M >> 31)
+      return 0x80000000;
+  else
+      return ~M + 1;
 }
