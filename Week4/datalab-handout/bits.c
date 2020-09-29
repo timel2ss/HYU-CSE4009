@@ -220,7 +220,12 @@ int specialBits(void) {
  *   Rating: 2
  */
 unsigned floatAbsVal(unsigned uf) {
-  return 2;
+  unsigned abs, b;
+  abs = uf & ~(1 << 31);
+  b = 0x7f800000;
+  if(((abs & b) == b) && abs ^ b)
+	  return uf;
+  return abs;
 }
 /* 
  * floatScale4 - Return bit-level equivalent of expression 4*f for
@@ -234,7 +239,43 @@ unsigned floatAbsVal(unsigned uf) {
  *   Rating: 4
  */
 unsigned floatScale4(unsigned uf) {
-    return 2;
+  int times = 2;
+  unsigned mask = ~(1 << 31);
+  unsigned f = mask & uf;
+  unsigned frac_mask = (~0) + (1 << 23);
+  unsigned exp_mask = 0xFF;
+  unsigned sign = uf >> 31;
+
+  unsigned exp = f >> 23;
+  unsigned frac = frac_mask & uf;
+
+  if ((exp == 0xFF) && (frac != 0)) {
+    return uf;
+  }
+
+  while (times--) {
+    if (exp != 0) {
+      if (exp != 0xFF) {
+        exp = exp + 1;
+      }
+      if (exp == 0xFF) {
+        frac = 0;
+      }
+    } else {
+      if (frac & (1 << 22)) {
+        frac = frac << 1;
+        exp = 1;
+      } else {
+        frac = frac << 1;
+        exp = 0;
+      }
+    }
+  }
+
+  frac = frac & frac_mask;
+  exp = exp & exp_mask;
+
+  return (sign << 31) | ((exp) << 23) | frac;
 }
 /* 
  * floatNegate - Return bit-level equivalent of expression -f for
@@ -248,7 +289,10 @@ unsigned floatScale4(unsigned uf) {
  *   Rating: 2
  */
 unsigned floatNegate(unsigned uf) {
- return 2;
+  int flag = (uf & 0x7fffffff) > 0x7f800000;
+  if(flag)
+      return uf;
+  return uf ^ 0x80000000;
 }
 /*
  * satMul2 - multiplies by 2, saturating to Tmin or Tmax if overflow
