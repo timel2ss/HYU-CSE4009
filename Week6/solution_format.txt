@@ -1,7 +1,7 @@
-phase1_answer
-phase2_answer
-phase3_answer
-phase4_answer
-phase5_answer
-phase6_answer
-secret_phase_answer (optional)
+Verbosity leads to unclear, inarticulate things.
+1 2 4 7 11 16
+0 224
+14 45 DrEvil
+5 115
+2 3 4 5 1 6
+35
