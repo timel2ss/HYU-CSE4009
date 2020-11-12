@@ -10,7 +10,7 @@
 typedef struct CacheLine_ {
     int latest;
     int valid;
-    int tag;
+    unsigned tag;
     char* block;
 }CacheLine;
 
@@ -24,23 +24,24 @@ typedef struct Cache_ {
 
 Cache* createCache(void);
 void freeCache(Cache* cache);    
-void accessCache(Cache* cache, int address, int size, int s, int b);
-int checkHitOrMiss(Cache* cache);
-int checkEmptyLine(Cache* cache);
-int checkEvictLine(Cache* cache);
+void accessCache(Cache* cache, unsigned address, int size, int s, int b);
+int checkHitOrMiss(CacheSet set, unsigned tag);
+int checkEmptyLine(CacheSet set);
+int checkEvictLine(CacheSet set);
 
 int numOfSets = 0, numOfLines = 0, sizeOfBlock = 0;
 int hitCount = 0, missCount = 0, evictionCount = 0;
 int flag_v = 0;
+char instruction;
 
 int main(int argc, char* argv[])
 {
     int c;
     int s, E, b;
     char* traceFileName;
-    File* traceFile;
-    char instruction;
-    int address, size;
+    FILE* traceFile;
+    unsigned address;
+    int size;
 
     Cache* cache;
 
@@ -59,7 +60,7 @@ int main(int argc, char* argv[])
                 b = atoi(optarg);
                 break;
             case 't':
-                memcpy(traceFileName, optarg, strlen(optarg));
+                traceFileName = optarg;
                 break;
             case '?':
                 printf("Unknown flag : %c", optopt);
@@ -71,16 +72,18 @@ int main(int argc, char* argv[])
     sizeOfBlock = pow(2, b);
 
     cache = createCache();
-
+    
     traceFile = fopen(traceFileName, "r");
     if(traceFile == NULL) {
         printf("Trace file cannot be found.");
         exit(1);
     }
-
+    
     while(fscanf(traceFile, " %c %x, %d", &instruction, &address, &size) != EOF) {
         if(flag_v) {
-            printf("%c %x,%d ", instruction, address, size);
+            if(instruction != 'I') {
+                printf("%c %x,%d ", instruction, address, size);
+            }
         }
 
         switch(instruction) {
@@ -99,14 +102,16 @@ int main(int argc, char* argv[])
         }
 
         if(flag_v) {
-            printf("\n");
+            if(instruction != 'I') {
+                printf("\n");
+            }
         }
     }
 
     printSummary(hitCount, missCount, evictionCount);
-
+    
     fclose(traceFile);
-    freeCache(cache, numOfSets, E);
+    freeCache(cache);
     return 0;
 }
 
@@ -116,20 +121,15 @@ Cache* createCache(void) {
     cache = (Cache*)malloc(sizeof(Cache));
     cache->sets = (CacheSet*)malloc(sizeof(CacheLine) * numOfSets);
     
-    CacheSet tempSet;
-    CacheLine tempLine;
-
     int i, j;
     for(i = 0; i < numOfSets; i++) {
-        tempSet.lines = (CacheLine*)malloc(sizeof(CacheLine) * numOfLines);
+        cache->sets[i].lines = (CacheLine*)malloc(sizeof(CacheLine) * numOfLines);
         for(j = 0; j < numOfLines; j++) {
-            tempLine.latest = 0;
-            tempLine.valid = 0;
-            tempLine.tag = 0;
-            tempLine.block = (char*)malloc(sizeOfBlock);
-            tempSet.lines[i] = tempLine;
+            cache->sets[i].lines[j].latest = 0;
+            cache->sets[i].lines[j].valid = 0;
+            cache->sets[i].lines[j].tag = 0;
+            cache->sets[i].lines[j].block = (char*)malloc(sizeOfBlock);
         }
-        cache->sets[i] = tempSet;
     }
     return cache;
 }
@@ -137,49 +137,73 @@ Cache* createCache(void) {
 void freeCache(Cache* cache) { 
     int i, j;
     for(i = 0; i < numOfSets; i++) {
-        CacheSet* tempSet = cache->sets[i];
-        if(tempSet->lines != NULL) {
-            for(j = 0; j < numOfLines; j++) {
-                CacheLine* tempLine = tempSet->lines[i];
-                if(tempLine != NULL) {
-                    free(tempLine->block);
-                }
-            }
-            free(tempSet->lines);
+        for(j = 0; j < numOfLines; j++) {
+            free(cache->sets[i].lines[j].block);
         }
-        if(tempSet != NULL) {
-            free(tempSet);
-        }
+        free(cache->sets[i].lines);
     }
+    free(cache->sets);
     free(cache);
 }
 
-void accessCache(Cache* cache, int address, int size, int s, int b) {
+void accessCache(Cache* cache, unsigned address, int size, int s, int b) {
     int tagSize = 32 - (s + b);
-    int tag = address >> (s + b);
-    int setIndex = (address << tagSize) >> (tagSize + b);
+    unsigned tag = address >> (s + b);
+    unsigned setIndex = (address << tagSize) >> (tagSize + b);
+    int index, i;
 
     CacheSet cacheSet = cache->sets[setIndex];
     int check = checkHitOrMiss(cacheSet, tag);
-    if(check == -1) {
+    if(check != -1) {
+        hitCount++;
+        cache->sets[setIndex].lines[check].latest = 0;
+        if(flag_v) {
+            if(instruction != 'I') {
+                printf("hit ");
+            }
+        }
+    }
+    else {
         missCount++;
         if(flag_v) {
-            printf("miss ");
+            if(instruction != 'I') {
+                printf("miss ");
+            }
+        }
+        
+        index = checkEmptyLine(cacheSet);
+        
+        if(index != -1) {
+            cache->sets[setIndex].lines[index].valid = 1;
+            cache->sets[setIndex].lines[index].tag = tag;
+            cache->sets[setIndex].lines[index].latest = 0;
+        }
+        else {
+            index = checkEvictLine(cacheSet);
+            cache->sets[setIndex].lines[index].tag = tag;
+            cache->sets[setIndex].lines[index].latest = 0;
+            if(flag_v) {
+                if(instruction != 'I') {
+                    printf("eviction ");
+                }
+            }
+            evictionCount++;
+        }
+    }
+    for(i = 0; i < numOfLines; i++) {
+        if(cache->sets[setIndex].lines[i].valid) {
+            cache->sets[setIndex].lines[i].latest++;
         }
     }
 
 }
 
-int checkHitOrMiss(CacheSet* set, int tag) {
+int checkHitOrMiss(CacheSet set, unsigned tag) {
     int i;
-    for(int i = 0; i < numOfLines; i++) {
-        CacheLine tempLine = set->lines[i];
-        if(tempLine.valid == 1) {
+    for(i = 0; i < numOfLines; i++) {
+        CacheLine tempLine = set.lines[i];
+        if(tempLine.valid) {    
             if(tempLine.tag == tag) {
-                hitCount++;
-                if(flag_v) {
-                    printf("hit ");
-                }
                 return i;
             }
         }
@@ -187,10 +211,25 @@ int checkHitOrMiss(CacheSet* set, int tag) {
     return -1;
 }
 
-int checkEmptyLine(Cache* cache) {
-
+int checkEmptyLine(CacheSet set) {
+    int i;
+    for(i = 0; i < numOfLines; i++) {
+        if(!set.lines[i].valid) {
+            return i;
+        }
+    }
+    return -1;
 }
 
-int checkEvictLine(Cache* cache) {
-
+int checkEvictLine(CacheSet set) {
+    int i;
+    int LRU = set.lines[0].latest;
+    int index = 0;
+    for(i = 1; i < numOfLines; i++) {
+        if(LRU < set.lines[i].latest) {
+            LRU = set.lines[i].latest;
+            index = i;
+        }
+    }
+    return index;
 }
