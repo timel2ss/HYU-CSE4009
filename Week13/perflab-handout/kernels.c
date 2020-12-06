@@ -10,10 +10,10 @@
  * Please fill in the following team struct 
  */
 team_t team = {
-    "Username",              /* name */
+    "이용우",              /* name */
 
-    "User ID",     /* student ID */
-    "User email",  /* student email */
+    "2019054957",     /* student ID */
+    "dyddn0823@hanyang.ac.kr",  /* student email */
 
     "",                   /* Second member full name (leave blank if none) */
     ""                    /* Second member email addr (leave blank if none) */
